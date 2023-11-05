@@ -1,13 +1,14 @@
 version: "3.4"
 
 services:
-  frontend:
+  webserver:
+    image: nginx:1.25.3
     container_name: quiz_frontend
-    build:
-      context: ./
     restart: unless-stopped
     tty: true
     ports:
       - '80:80'
-    
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
   
