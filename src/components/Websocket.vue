@@ -1,17 +1,66 @@
 <script lang="ts" setup>
     import { ref, inject } from 'vue'
     import type { Ref } from "vue";
-    import { onMessage } from 'vue3-websocket'
+    import { onMessage, onOpen, onClose } from 'vue3-websocket'
 
     const text = ref('')
     const messages = ref(<string[]>[])
-
     const socket = <Ref<WebSocket>>inject('socket')
 
-    const sendMessage = () => socket.value.send(text.value)
+    let pingInterval = 0
+
+    function composeMessageFrame() { 
+        return {
+            command: 'message', 
+            payload: text.value,        
+        } 
+    }
+
+    function composePingFrame() {
+        return {
+            command: 'ping',
+            payload: [],
+        }
+    }
+
+    function sendFrame(composeFrameCallback: Function) {
+        const frame = composeFrameCallback()
+        socket.value.send(JSON.stringify(frame))
+    }
+
+    function sendMessageFrame() {
+        sendFrame( composeMessageFrame )
+        text.value = ''
+    }
+
+    function sendPingFrame() {
+        sendFrame( composePingFrame )
+    }
+
+    onOpen(() => {
+        pingInterval = setInterval(() => { sendPingFrame() }, 10000)
+    })
+
+    onClose(() => {
+        clearInterval(pingInterval)
+    })
 
     onMessage((message: MessageEvent) => {
-        messages.value.push(`Server: ${message.data}`)
+        const decoded = JSON.parse(message.data)
+
+        switch (decoded.command) {
+            case 'message':
+                messages.value.push(`${decoded.payload}`)
+                break
+            case 'error':
+                messages.value.push(`Error! ${decoded.payload}`)
+                break
+            case 'pong':
+                messages.value.push(`Pong!`)
+                break
+            default:
+                console.error('Unknown command', message.data)
+        }
     })
 </script>
 
@@ -25,7 +74,7 @@
         <div>
             <input 
                 v-model="text" 
-                @keyup.enter="sendMessage()"
+                @keyup.enter="sendMessageFrame()"
                 type="text" 
                 placeholder="Enter для отправки..."/>
         </div>
@@ -58,5 +107,6 @@
         border-radius: 4px;
         padding: 5px;
         cursor: default;
+        overflow: auto;
     }
 </style>
